@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.backends.backend_pdf import PdfPages
 import time
 import os
 
@@ -10,14 +11,19 @@ file_path = "output_tab.txt"
 
 strings = ["E", "A", "D", "G", "B", "e"]
 string_map = {s: i for i, s in enumerate(strings)}
-tablature = {string: "" for string in strings}  # Store tablature as strings
+
+tablature = {string: [] for string in strings}
+
 max_notes = 25  # Maximum notes per string
 curr_tab_length = 0  # Current length of tablature
 note_spacing = "  "  # Space between notes
 previous_note = None
+max_visible_rows = 3
 
-# Initialize the plot
-fig, (ax_fretboard, ax_tab) = plt.subplots(2, 1, figsize=(15, 7), gridspec_kw={'height_ratios': [2, 1]})
+full_tablature = []
+complete_tablature = []
+fig, (ax_fretboard, ax_tab1, ax_tab2, ax_tab3) = plt.subplots(4, 1, figsize=(15, 7),
+                                                              gridspec_kw={'height_ratios': [1, 1, 1, 1]})
 
 # Fretboard setup
 ax_fretboard.set_xlim(0, 20)  # Frets
@@ -38,22 +44,54 @@ for fret in range(21):  # Draw frets
 # Marker for current note
 marker, = ax_fretboard.plot([], [], "ro", markersize=10)
 
+ax_tabs = [ax_tab1, ax_tab2, ax_tab3]
+
 # Tablature setup
-ax_tab.set_xlim(0, max_notes)  # Number of notes visible
-ax_tab.set_ylim(-1, 6)  # Strings
-ax_tab.set_yticks(range(6))
-ax_tab.set_yticklabels(strings)
-ax_tab.set_title("Guitar Tablature")
-ax_tab.set_xlabel("Notes")
-ax_tab.set_xticks([])  # Remove x-ticks for cleaner display
-ax_tab.grid(True)
+for ax_tab in ax_tabs:
+    ax_tab.set_xlim(0, max_notes)
+    ax_tab.set_ylim(-1, 6)
+
+    ax_tab.set_yticks(range(6))
+    ax_tab.set_yticklabels(strings)
+    ax_tab.set_xticks([])
+    ax_tab.grid(False)
+
+for j in range(max_visible_rows):
+    for i in range(6):  # Draw strings
+        ax_tabs[j].plot(range(28), [i] * 28, color="black", linewidth=1.0)
 
 # Text elements for tablature (one per string)
-tab_lines = [ax_tab.text(1.5, i, "", fontsize=12, va="center", ha="left") for i in range(6)]
+
+tab_lines1 = [ax_tab1.text(1.5, i, "", fontsize=12, va="center", ha="left") for i in range(6)]
+tab_lines2 = [ax_tab2.text(1.5, i, "", fontsize=12, va="center", ha="left") for i in range(6)]
+tab_lines3 = [ax_tab3.text(1.5, i, "", fontsize=12, va="center", ha="left") for i in range(6)]
+
+tab_lines = [tab_lines1, tab_lines2, tab_lines3]
 
 
 def format_note(note):
     return f"{note:^3}"  # Center-align within 3 spaces
+
+
+def append_note_to_full_tablature(string, fret):
+    global full_tablature, complete_tablature
+
+    # Ensure each string has a row in full tablature
+    if len(full_tablature) == 0 or len(full_tablature[-1][string]) >= max_notes:
+        full_tablature.append({s: [] for s in strings})  # Create a new row
+        complete_tablature.append({s: [] for s in strings})  # Create a new row
+
+    # Add the note to the latest row
+    full_tablature[-1][string].append(fret)
+    complete_tablature[-1][string].append(fret)
+    for s in strings:
+        if s != string:
+            full_tablature[-1][s].append(" ")
+            complete_tablature[-1][s].append(" ")
+
+    # If rows exceed max visible rows, simulate scrolling by removing the oldest visible row
+    if len(full_tablature) > max_visible_rows:
+        full_tablature.pop(0)
 
 
 # Function to read new notes from the file
@@ -78,7 +116,55 @@ def read_new_notes(file):
     return notes
 
 
-tablature = {string: [] for string in strings}
+# Save the full tablature periodically
+def save_full_tablature(filename="full_tablature.txt"):
+    with open(filename, "w") as f:
+        for row in full_tablature:
+            for string_name in strings:
+                f.write(f"{string_name}: {''.join(row[string_name])}\n")
+            f.write("\n")
+
+
+def save_full_tablature_pdf(filename="full_tablature.pdf"):
+    """
+    Save the full tablature as a PDF.
+    """
+    num_rows = len(complete_tablature)
+    row_spacing = 0.5  # Vertical spacing between strings within a row
+    new_row_spacing = 1.0  # Extra vertical space between new tablature rows
+
+    fig_full, ax_full = plt.subplots(
+        figsize=(15, num_rows * row_spacing + num_rows * new_row_spacing))
+
+    # Set up the full tablature axis
+    ax_full.set_xlim(0, max_notes)
+    ax_full.set_ylim(-1, num_rows * 6 * row_spacing + num_rows * new_row_spacing)
+    ax_full.set_yticks([])
+    # ax_full.set_yticklabels(strings)
+    ax_full.set_title("Guitar Tablature", fontsize=16)
+    ax_full.set_xlabel("Notes")
+    ax_full.set_xticks([])
+
+    # Draw the full tablature
+    y_offset = 0
+    for row_idx, row in enumerate(complete_tablature):
+        y_offset += new_row_spacing
+        for string_idx, string_name in enumerate(reversed(strings)):
+            notes = row[string_name]
+            formatted_notes = [format_note(note) for note in notes]
+            ax_full.text(0, y_offset + string_idx * row_spacing, note_spacing.join(formatted_notes),
+                         fontsize=12, va="center", ha="left", family="monospace")
+            ax_full.plot(range(max_notes), [y_offset + string_idx * row_spacing] * max_notes,
+                         color="black", linewidth=1.0)
+        y_offset += 6 * row_spacing  # Move to the next tablature row
+
+    ax_full.invert_yaxis()  # Match tablature style (high e-string at the top)
+    plt.tight_layout()
+
+    # Save the full tablature to a PDF
+    with PdfPages(filename) as pdf:
+        pdf.savefig(fig_full, bbox_inches="tight")
+    plt.close(fig_full)  # Close the figure to free memory
 
 
 # Function to update the plot
@@ -86,14 +172,9 @@ def update(frame):
     global last_position, active_note, curr_tab_length, previous_note
     new_notes = read_new_notes(file)
 
-    # Update active note if there's a new one
     if new_notes:
         active_note = new_notes[-1]
-    # Display the active note
 
-    # if ((active_note and not previous_note) or
-    #         (active_note and (active_note["fret"] != previous_note["fret"] or
-    #                           active_note["string"] != previous_note["string"]))):
     if new_notes and active_note:
         previous_note = active_note
         fret = active_note["fret"]
@@ -104,23 +185,17 @@ def update(frame):
         marker.set_data([fret], [string_mapped])
         curr_tab_length = max(len(tablature[string]), curr_tab_length)
 
-        if curr_tab_length == max_notes:
-            for s in strings:
-                tablature[s].pop(0)  # Remove the oldest note
-                curr_tab_length -= 1
-        # Append note to the tablature
-        if curr_tab_length < max_notes:
-            tablature[string].append(str(fret))
-            for s in strings:
-                if s != string:
-                    tablature[s].append(" ")
+        # Add note to full tablature
+        append_note_to_full_tablature(string, str(fret))
 
-        # Update tablature visualization
-        for i, string_name in enumerate(strings):
-            notes = tablature[string_name]
-            formatted_notes = [format_note(note) for note in notes]  # Apply formatting
-            tab_lines[i].set_text(note_spacing.join(formatted_notes))
-    return marker, *tab_lines
+        visible_tablature = full_tablature[-max_visible_rows:]
+        for row_idx, row in enumerate(visible_tablature):
+            for i, string_name in enumerate(strings):
+                notes = row[string_name]
+                formatted_notes = [format_note(note) for note in notes]
+                tab_lines[row_idx][i].set_text(note_spacing.join(formatted_notes))
+
+    return marker, *[line for tab in tab_lines for line in tab]
 
 
 # Open the file and initialize the read position
@@ -131,5 +206,10 @@ with open(file_path, "r") as file:
 
     # Animation
     ani = animation.FuncAnimation(fig, update, interval=100, blit=True)
+    # Periodically save the full tablature
     plt.tight_layout()
-    plt.show()
+    try:
+        plt.show()
+    finally:
+        save_full_tablature()  # Save when closing
+        save_full_tablature_pdf("final_full_tablature.pdf")

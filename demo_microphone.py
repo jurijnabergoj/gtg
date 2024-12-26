@@ -10,19 +10,40 @@ MAX_MOVEMENT_COST = 8
 # Data structure to store detected notes
 detected_notes = []
 
+# PyAudio setup
+buffer_size = 1024
+pyaudio_format = pyaudio.paFloat32
+n_channels = 1
+samplerate = 44100
+
+p = pyaudio.PyAudio()
+stream = p.open(format=pyaudio_format,
+                channels=n_channels,
+                rate=samplerate,
+                input=True,
+                frames_per_buffer=buffer_size)
+
+# Aubio setup
+tolerance = 0.2
+win_s = 4096  # FFT size
+hop_s = buffer_size  # Hop size
+pitch_o = aubio.pitch("default", win_s, hop_s, samplerate)
+pitch_o.set_unit("Hz")
+pitch_o.set_tolerance(tolerance)
+
 
 def find_tab_positions(frequency):
     """Map detected frequency to guitar tablature positions."""
     if frequency == 0:
         return None  # Silence or unrecognized
-    positions = []
+    note_positions = []
     for i, base_freq in enumerate(guitar_tuning):
         for fret in range(0, 21):  # Standard guitars have 20 frets
             note_freq = base_freq * (2 ** (fret / 12))
             if abs(note_freq - frequency) < 3:  # Allow slight deviation
-                positions.append((string_names[i], fret))
+                note_positions.append((string_names[i], fret))
                 break  # Stop after the first match for this string
-    return positions
+    return note_positions
 
 
 def update_last_three_notes(new_note):
@@ -33,12 +54,11 @@ def update_last_three_notes(new_note):
         last_three_notes.pop(0)
 
 
-def select_appropriate_string_min(positions, previous_position=None):
+def select_appropriate_string_min(positions):
     """Select the easiest string and fret combination."""
     if not positions:
         return None
     # Prioritize lower frets and choose the lowest string when possible
-    # return min(positions, key=lambda x: (x[1], string_names.index(x[0])))
     return min(positions, key=lambda x: (x[1], -string_names.index(x[0])))
 
 
@@ -119,32 +139,7 @@ def select_appropriate_string(positions, previous_position=None):
 
 
 def matches_previous_note(prev_position, position):
-    if prev_position == position:
-        return True
-
-    return False
-
-
-# PyAudio setup
-buffer_size = 1024
-pyaudio_format = pyaudio.paFloat32
-n_channels = 1
-samplerate = 44100
-
-p = pyaudio.PyAudio()
-stream = p.open(format=pyaudio_format,
-                channels=n_channels,
-                rate=samplerate,
-                input=True,
-                frames_per_buffer=buffer_size)
-
-# Aubio setup
-tolerance = 0.2
-win_s = 4096  # FFT size
-hop_s = buffer_size  # Hop size
-pitch_o = aubio.pitch("default", win_s, hop_s, samplerate)
-pitch_o.set_unit("Hz")
-pitch_o.set_tolerance(tolerance)
+    return prev_position == position
 
 
 def save_note_to_file(note, filename="output_tab.txt"):
@@ -213,7 +208,7 @@ try:
                     note_signal_max = signal.max()
                     save_note_to_file(note_active)
                     update_last_three_notes(selected_position)
-                    print(f"Pitch: {pitch:.2f} Hz, Tablature: {selected_position}, Signal Max: {signal.max()}")
+                    print(f"Pitch: {pitch:.2f} Hz, Tablature: {selected_position}, Time: {current_time}")
 
 except KeyboardInterrupt:
     print("\n*** Stopping recording ***")
