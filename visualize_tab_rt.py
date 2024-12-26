@@ -61,7 +61,6 @@ for j in range(max_visible_rows):
         ax_tabs[j].plot(range(28), [i] * 28, color="black", linewidth=1.0)
 
 # Text elements for tablature (one per string)
-
 tab_lines1 = [ax_tab1.text(1.5, i, "", fontsize=12, va="center", ha="left") for i in range(6)]
 tab_lines2 = [ax_tab2.text(1.5, i, "", fontsize=12, va="center", ha="left") for i in range(6)]
 tab_lines3 = [ax_tab3.text(1.5, i, "", fontsize=12, va="center", ha="left") for i in range(6)]
