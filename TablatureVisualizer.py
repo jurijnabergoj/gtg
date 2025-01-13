@@ -13,7 +13,7 @@ class TablatureVisualizer:
         plt.rcParams['font.family'] = 'monospace'
         self.strings = string_names
         self.string_map = {s: i for i, s in enumerate(self.strings)}
-        self.max_notes = 25
+        self.max_notes = 22
         self.note_spacing = "  "
         self.max_visible_rows = 3
         self.full_tablature = []

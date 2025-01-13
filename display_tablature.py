@@ -8,12 +8,61 @@ from PIL import Image
 
 
 class TablatureRenderer:
-    def __init__(self, pdf_filename):
+    def __init__(self, pdf_filename, num_rows, max_notes_in_row):
         self.doc = fitz.open(pdf_filename)
         self.current_page = self.doc[0]
         self.fig, self.ax = plt.subplots(figsize=(15, 8))
         self.current_line = None
+        self.num_rows = num_rows
+        self.max_notes_in_row = max_notes_in_row
+        self.current_row = 0
+        print(self.fig.get)
+
+        # Vertical spacing constants
+        self.row_height = 50 / 378  # Height of each tablature row
+        self.row_spacing = 30 / 378  # Space between rows
+        self.top_margin = 62 / 378  # Space from top of plot
+
+        # Calculate initial y positions
+        self.set_axvline_ypos()
         self.last_note_time = 0
+
+        # Will be set after first render
+        self.plot_width = None
+        self.plot_height = None
+        self.get_plot_dimensions()
+        print(self.plot_width, self.plot_height)
+
+    def get_plot_dimensions(self):
+        """Get the width and height from data coordinates"""
+        xlim = self.ax.get_xlim()
+        ylim = self.ax.get_ylim()
+        self.plot_width = xlim[1] - xlim[0]
+        self.plot_height = ylim[1] - ylim[0]
+        return self.plot_width, self.plot_height
+
+    def set_axvline_ypos(self):
+        # Calculate the y positions for the current row
+        row_start = self.top_margin + (self.current_row * (self.row_height + self.row_spacing))
+        row_end = row_start + self.row_height
+
+        self.ymin = 1 - row_end
+        self.ymax = 1 - row_start
+
+    def calculate_x_position(self, timestamp_index):
+        # Calculate x position based on note index
+        if timestamp_index >= self.max_notes_in_row:
+            prev_row = self.current_row
+            self.current_row = int(timestamp_index / self.max_notes_in_row)
+            timestamp_index = timestamp_index % self.max_notes_in_row
+
+            # Only update y positions if we've moved to a new row
+            if prev_row != self.current_row:
+                self.set_axvline_ypos()
+
+        offset = 17
+        scaling_factor = 36
+        return timestamp_index * scaling_factor + offset
 
     def render_page(self):
         pix = self.current_page.get_pixmap()
@@ -22,12 +71,6 @@ class TablatureRenderer:
         self.ax.imshow(img_data)
         self.ax.axis('off')
         self.fig.canvas.draw()
-
-    def calculate_x_position(self, timestamp_index):
-        # Calculate x position based on note index
-        offset = 17
-        scaling_factor = 36
-        return timestamp_index * scaling_factor + offset
 
     def find_current_note(self, elapsed_time, note_metadata):
         # Find the current note being played by checking which time interval we're in
@@ -48,7 +91,8 @@ class TablatureRenderer:
             if self.current_line:
                 self.current_line.remove()
             x_coord = self.calculate_x_position(current_note_idx)
-            self.current_line = self.ax.axvline(x=x_coord, color='red', linestyle='--', alpha=0.7)
+            self.current_line = self.ax.axvline(x=x_coord, ymin=self.ymin, ymax=self.ymax, color='red', linestyle='--',
+                                                alpha=0.7)
             self.fig.canvas.draw()
 
 
@@ -82,15 +126,18 @@ def main():
     filename_pdf = "final_tablature.pdf"
     filename_audio = "output_audio.wav"
     note_metadata_file = "output_tab.txt"
+    max_notes_in_row = 22
 
     # Read note timestamps
     note_timestamps = []
     with open(note_metadata_file) as notes:
         for note in notes:
             note_timestamps.append(float(note.split(",")[0]))
-
+    num_rows = int(len(note_timestamps) / max_notes_in_row)
+    print(len(note_timestamps))
+    print(num_rows)
     # Create renderer and start playback
-    renderer = TablatureRenderer(filename_pdf)
+    renderer = TablatureRenderer(filename_pdf, num_rows, max_notes_in_row)
     play_audio_with_tablature(filename_audio, renderer, note_timestamps)
     plt.show()  # Keep the window open until closed by user
 
