@@ -50,7 +50,6 @@ class AudioProcessor:
         if self.recording:
             self.frames.append(in_data)
 
-        # Process audio for pitch detection
         signal = np.frombuffer(in_data, dtype=np.float32)
         self.process_audio(signal)
 
@@ -62,9 +61,11 @@ class AudioProcessor:
         self.frames = []
         self.start_offset = time.time()
 
-        # Start recording for specified duration
+        # Start recording
         def stop_recording():
-            time.sleep(duration)
+            start_time = time.time()
+            while time.time() - start_time < duration and self.recording:
+                time.sleep(0.1)
             self.recording = False
             self.save_recording("output_audio.wav")
 
@@ -73,9 +74,7 @@ class AudioProcessor:
 
     def save_recording(self, filename):
         print(f"Saving recording to {filename}")
-        # Convert frames to numpy array
         audio_data = np.frombuffer(b''.join(self.frames), dtype=np.float32)
-        # Convert float32 to int16
         audio_data = (audio_data * 32767).astype(np.int16)
         write(filename, self.samplerate, audio_data)
         print(f"Recording saved to {filename}")
@@ -150,7 +149,7 @@ class AudioProcessor:
 
         if valid_positions and self.last_three_notes:
             result = min(valid_positions, key=movement_cost)
-            if abs(string_names.index(result[0]) - string_names.index(self.last_three_notes[-1][0])) >= 2:
+            if abs(string_names.index(result[0]) - string_names.index(self.last_three_notes[-1][0])) >= 3:
                 return None
             return result
         elif valid_positions:
@@ -169,6 +168,9 @@ class AudioProcessor:
             f.write(f"{rel_start:.2f},{string},{fret}\n")
 
     def cleanup(self):
-        self.stream.stop_stream()
+        if self.recording:
+            self.recording = False
+        if self.stream.is_active():
+            self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()

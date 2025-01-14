@@ -36,7 +36,6 @@ class TablatureVisualizer:
         self.ax_tabs = [self.ax_tab1, self.ax_tab2, self.ax_tab3]
         self.setup_tablature()
 
-        # Create text elements for tablature
         self.tab_lines = [
             [ax.text(1.5, i, "", fontsize=12, va="center", ha="left")
              for i in range(6)] for ax in self.ax_tabs
@@ -129,13 +128,10 @@ class TablatureVisualizer:
             string = self.active_note["string"]
             string_mapped = self.string_map[string]
 
-            # Update fretboard marker
             self.marker.set_data([fret], [string_mapped])
 
-            # Add note to tablature
             self.append_note_to_full_tablature(string, str(fret))
 
-            # Update visible tablature
             visible_tablature = self.full_tablature[-self.max_visible_rows:]
             for row_idx, row in enumerate(visible_tablature):
                 for i, string_name in enumerate(self.strings):
@@ -165,6 +161,10 @@ class TablatureVisualizer:
         for row in self.complete_tablature:
             y_offset += new_row_spacing
             for string_idx, string_name in enumerate(reversed(self.strings)):
+                ax_full.text(-0.5, y_offset + string_idx * row_spacing,
+                             string_name,
+                             fontsize=12, va="center", ha="right", family="monospace")
+
                 notes = row[string_name]
                 formatted_notes = [self.format_note(note) for note in notes]
                 ax_full.text(0, y_offset + string_idx * row_spacing,
